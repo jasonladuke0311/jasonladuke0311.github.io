@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chord change trainer</title>
+<style>
+  :root {
+    --bg: #1c1b19;
+    --panel: #262420;
+    --card: #302d28;
+    --accent: #d97757;
+    --text: #f2ede4;
+    --muted: #9a9488;
+    --border: #3d3a34;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+  .app {
+    width: 100%;
+    max-width: 420px;
+  }
+  h1 {
+    font-size: 15px;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+    text-align: center;
+    margin: 0 0 24px;
+  }
+  .chords {
+    display: flex;
+    align-items: stretch;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  .chord-card {
+    flex: 1;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 28px 12px;
+    text-align: center;
+    font-size: 34px;
+    font-weight: 600;
+  }
+  .arrow {
+    display: flex;
+    align-items: center;
+    color: var(--muted);
+    font-size: 20px;
+  }
+  .timer-ring {
+    display: flex;
+    justify-content: center;
+    margin: 4px 0 20px;
+  }
+  .timer-num {
+    font-size: 42px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: var(--accent);
+  }
+  .controls {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    margin-bottom: 22px;
+  }
+  button {
+    font-family: inherit;
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--text);
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 20px;
+    cursor: pointer;
+  }
+  button:active { transform: scale(0.97); }
+  button.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #23150f;
+  }
+  .settings {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px 18px;
+  }
+  .row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 0;
+  }
+  .row + .row { border-top: 1px solid var(--border); }
+  .label { font-size: 14px; color: var(--text); }
+  .sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .switch {
+    position: relative;
+    width: 44px;
+    height: 26px;
+    flex-shrink: 0;
+  }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .slider {
+    position: absolute; inset: 0;
+    background: var(--border);
+    border-radius: 999px;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .slider::before {
+    content: "";
+    position: absolute;
+    height: 20px; width: 20px;
+    left: 3px; top: 3px;
+    background: var(--text);
+    border-radius: 50%;
+    transition: transform 0.15s;
+  }
+  input:checked + .slider { background: var(--accent); }
+  input:checked + .slider::before { transform: translateX(18px); background: #23150f; }
+  .time-input {
+    width: 64px;
+    font-family: inherit;
+    font-size: 14px;
+    color: var(--text);
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px 8px;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <h1>Chord change trainer</h1>
+
+  <div class="chords">
+    <div class="chord-card" id="chordA">A maj</div>
+    <div class="arrow">&#8594;</div>
+    <div class="chord-card" id="chordB">C maj</div>
+  </div>
+
+  <div class="timer-ring">
+    <div class="timer-num" id="timerNum">1:00</div>
+  </div>
+
+  <div class="controls">
+    <button id="newPairBtn">New pair</button>
+    <button id="pauseBtn" class="primary">Pause</button>
+  </div>
+
+  <div class="settings">
+    <div class="row">
+      <div>
+        <div class="label">Auto-advance timer</div>
+        <div class="sub">New pair when time runs out</div>
+      </div>
+      <label class="switch">
+        <input type="checkbox" id="timerToggle" checked>
+        <span class="slider"></span>
+      </label>
+    </div>
+    <div class="row">
+      <div class="label">Interval (seconds)</div>
+      <input type="number" id="durationInput" class="time-input" value="60" min="2" max="600">
+    </div>
+  </div>
+</div>
+
+<script>
+  const chords = ["A maj","A min","C maj","D maj","D min","E maj","E min","F maj","G maj"];
+
+  const chordAEl = document.getElementById('chordA');
+  const chordBEl = document.getElementById('chordB');
+  const timerNumEl = document.getElementById('timerNum');
+  const newPairBtn = document.getElementById('newPairBtn');
+  const pauseBtn = document.getElementById('pauseBtn');
+  const timerToggle = document.getElementById('timerToggle');
+  const durationInput = document.getElementById('durationInput');
+
+  let duration = 60;
+  let remaining = duration;
+  let timerOn = true;
+  let paused = false;
+  let intervalId = null;
+
+  function pickTwo() {
+    const a = Math.floor(Math.random() * chords.length);
+    let b;
+    do { b = Math.floor(Math.random() * chords.length); } while (b === a);
+    return [chords[a], chords[b]];
+  }
+
+  function newPair() {
+    const [a, b] = pickTwo();
+    chordAEl.textContent = a;
+    chordBEl.textContent = b;
+  }
+
+  function formatTime(sec) {
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return m + ':' + String(s).padStart(2, '0');
+  }
+
+  function updateDisplay() {
+    timerNumEl.textContent = formatTime(remaining);
+    timerNumEl.style.opacity = timerOn ? '1' : '0.35';
+  }
+
+  function tick() {
+    if (!timerOn || paused) return;
+    remaining -= 1;
+    if (remaining <= 0) {
+      newPair();
+      remaining = duration;
+    }
+    updateDisplay();
+  }
+
+  function resetTimer() {
+    duration = Math.max(2, Math.min(600, parseInt(durationInput.value, 10) || 60));
+    durationInput.value = duration;
+    remaining = duration;
+    updateDisplay();
+  }
+
+  newPairBtn.addEventListener('click', () => {
+    newPair();
+    remaining = duration;
+    updateDisplay();
+  });
+
+  pauseBtn.addEventListener('click', () => {
+    paused = !paused;
+    pauseBtn.textContent = paused ? 'Resume' : 'Pause';
+  });
+
+  timerToggle.addEventListener('change', () => {
+    timerOn = timerToggle.checked;
+    updateDisplay();
+  });
+
+  durationInput.addEventListener('change', resetTimer);
+
+  newPair();
+  resetTimer();
+  intervalId = setInterval(tick, 1000);
+</script>
+</body>
+</html>
