@@ -19,8 +19,12 @@
   .controls{display:flex;flex-wrap:wrap;gap:18px;padding:20px 0;border-bottom:1px solid var(--line);align-items:flex-end;}
   .field label{display:block;font-size:.78rem;color:var(--muted);margin-bottom:5px;}
   select,input[type=text]{background:var(--bg2);color:var(--cream);border:1px solid var(--fret);border-radius:5px;padding:7px 9px;font-size:.9rem;}
-  .tuning-row{display:flex;gap:6px;flex-wrap:wrap;max-width:260px;}
-  .tuning-row input{width:40px;text-align:center;}
+  .tuning-row{display:flex;gap:6px;flex-wrap:nowrap;}
+  .tuning-row input{width:40px;text-align:center;flex:none;}
+  .tuning-wrap{display:flex;align-items:center;gap:8px;}
+  .tbtns{display:flex;flex-direction:column;gap:3px;}
+  .tbtn{background:var(--bg2);color:var(--cream);border:1px solid var(--fret);border-radius:5px;padding:2px 7px;cursor:pointer;font-size:.7rem;line-height:1.3;}
+  .tbtn:hover{border-color:var(--amber);color:var(--amber);}
   section{margin-top:34px;}
   section h2{font-size:1.15rem;color:var(--amber);margin-bottom:4px;}
   .sub{color:var(--muted);font-size:.85rem;margin-bottom:16px;}
@@ -74,7 +78,13 @@
     </div>
     <div class="field">
       <label>Strings (low&rarr;high)</label>
-      <div class="tuning-row" id="tuningRow"></div>
+      <div class="tuning-wrap">
+        <div class="tuning-row" id="tuningRow"></div>
+        <div class="tbtns">
+          <button type="button" class="tbtn" id="tuneUpBtn" title="Shift all strings up a semitone">&#9650;</button>
+          <button type="button" class="tbtn" id="tuneDownBtn" title="Shift all strings down a semitone">&#9660;</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -167,6 +177,18 @@ function currentTuningPCs(){
     return j<0?0:j;
   });
 }
+function transposeAll(delta){
+  [...tuningRow.querySelectorAll('input')].forEach(inp=>{
+    const v=inp.value.trim();
+    const j=idx(v.charAt(0).toUpperCase()+v.slice(1).replace('b','#'));
+    const pc=j<0?0:j;
+    inp.value=NOTES[(pc+delta+12)%12];
+  });
+  tuningSel.value='custom';
+  render();
+}
+document.getElementById('tuneUpBtn').addEventListener('click',()=>transposeAll(1));
+document.getElementById('tuneDownBtn').addEventListener('click',()=>transposeAll(-1));
 
 function chordTones(rootIdx,quality){return QUALITY_TONES[quality].map(i=>(rootIdx+i+12)%12);}
 function windowFrets(start){return start===0?[1,2,3,4]:[start,start+1,start+2,start+3];}
@@ -249,7 +271,7 @@ function scaleDiagram(title,steps,rootIdx,tuningPCs){
   }
   for(let i=0;i<n;i++){ const y=top+i*30; s+=`<line x1="${left}" y1="${y}" x2="${left+frets*fw}" y2="${y}" stroke="var(--fret)" stroke-width="1"/>`; }
   for(let i=0;i<n;i++){
-    const y=top+i*30, pc0=tuningPCs[i];
+    const y=top+(n-1-i)*30, pc0=tuningPCs[i];
     for(let f=0;f<=frets;f++){
       const pc=(pc0+f)%12;
       if(tones.includes(pc)){
