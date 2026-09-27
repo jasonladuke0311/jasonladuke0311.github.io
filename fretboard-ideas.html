@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fretwork &mdash; Key Idea Generator</title>
+<style>
+  :root{
+    --bg:#120d08; --bg2:#221709; --fret:#e3cd9c; --cream:#faf3e3;
+    --amber:#ffa337; --muted:#b6a181; --line:#5a4326; --dot:#efe2bd; --dottext:#1a1006;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--cream);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;line-height:1.45;}
+  h1,h2,h3{font-family:Georgia,"Times New Roman",serif;font-weight:600;margin:0;}
+  header{padding:28px 24px 18px;border-bottom:1px solid var(--line);}
+  header h1{font-size:1.7rem;color:var(--amber);letter-spacing:.3px;}
+  header p{margin:6px 0 0;color:var(--muted);font-size:.92rem;max-width:640px;}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 24px 60px;}
+  .controls{display:flex;flex-wrap:wrap;gap:18px;padding:20px 0;border-bottom:1px solid var(--line);align-items:flex-end;}
+  .field label{display:block;font-size:.78rem;color:var(--muted);margin-bottom:5px;}
+  select,input[type=text]{background:var(--bg2);color:var(--cream);border:1px solid var(--fret);border-radius:5px;padding:7px 9px;font-size:.9rem;}
+  .tuning-row{display:flex;gap:6px;flex-wrap:wrap;max-width:260px;}
+  .tuning-row input{width:40px;text-align:center;}
+  section{margin-top:34px;}
+  section h2{font-size:1.15rem;color:var(--amber);margin-bottom:4px;}
+  .sub{color:var(--muted);font-size:.85rem;margin-bottom:16px;}
+
+  details.card{background:var(--bg2);border:1px solid var(--fret);border-radius:8px;margin-bottom:12px;overflow:hidden;}
+  details.card summary{list-style:none;cursor:pointer;padding:12px 18px;display:flex;justify-content:space-between;align-items:center;gap:10px;}
+  details.card summary::-webkit-details-marker{display:none;}
+  details.card summary .ttl{color:var(--amber);font-size:.95rem;}
+  details.card summary .notes{color:var(--cream);font-size:.82rem;font-weight:400;margin-left:8px;}
+  details.card summary .arrow{color:var(--muted);font-size:.8rem;transition:transform .15s;flex:none;}
+  details.card[open] summary .arrow{transform:rotate(90deg);}
+  details.card .body{padding:4px 18px 16px;}
+
+  .chord-row{display:flex;flex-wrap:wrap;gap:44px 40px;}
+  .chord{text-align:center;}
+  svg text{font-size:10px;font-family:inherit;}
+  svg text.lbl{fill:var(--cream);}
+  .legend{color:var(--muted);font-size:.78rem;margin-top:16px;}
+  .legend span{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;vertical-align:middle;}
+</style>
+</head>
+<body>
+<header>
+  <h1>Fretwork</h1>
+  <p>Pick a key and tuning. Get diatonic chord progressions with fretboard diagrams (degree-labeled), and full-neck scale diagrams with every note named, so you can pick your own position.</p>
+</header>
+<div class="wrap">
+  <div class="controls">
+    <div class="field">
+      <label>Key</label>
+      <select id="keySel"></select>
+    </div>
+    <div class="field">
+      <label>Mode (for progressions)</label>
+      <select id="modeSel">
+        <option value="major">Major</option>
+        <option value="minor">Minor</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Strings</label>
+      <select id="stringCountSel">
+        <option value="6">6-string</option>
+        <option value="7">7-string</option>
+        <option value="8">8-string</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Tuning preset</label>
+      <select id="tuningSel"></select>
+    </div>
+    <div class="field">
+      <label>Strings (low&rarr;high)</label>
+      <div class="tuning-row" id="tuningRow"></div>
+    </div>
+  </div>
+
+  <section>
+    <h2>Chord progressions</h2>
+    <div class="sub">Diatonic progressions in the chosen key. Circles show the scale degree of each note within the chord (1, 3, 5, etc). Click a card to bring it to the bottom &mdash; next to the scales below &mdash; and expand it.</div>
+    <div id="progs"></div>
+  </section>
+
+  <section>
+    <h2>Scales to solo over</h2>
+    <div class="sub">Full-neck reference (frets 0&ndash;12), every note named so you can pick your own position or fingering. Click a card to bring it to the top &mdash; next to the progression above &mdash; and expand it.</div>
+    <div id="scales"></div>
+    <div class="legend"><span style="background:var(--amber)"></span>root &nbsp;&nbsp;<span style="background:var(--dot)"></span>scale tone</div>
+  </section>
+</div>
+
+<script>
+const NOTES=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+const idx=n=>NOTES.indexOf(n);
+
+const QUALITY_TONES={maj:[0,4,7],min:[0,3,7],dim:[0,3,6]};
+const QUALITY_LABELS={maj:['1','3','5'],min:['1','b3','5'],dim:['1','b3','b5']};
+const QUALITY_SUFFIX={maj:'',min:'m',dim:'dim'};
+const MAJOR_STEPS=[0,2,4,5,7,9,11];
+const MAJOR_QUAL=['maj','min','min','maj','maj','min','dim'];
+const MAJOR_RN=['I','ii','iii','IV','V','vi','vii°'];
+const MINOR_STEPS=[0,2,3,5,7,8,10];
+const MINOR_QUAL=['min','dim','maj','min','min','maj','maj'];
+const MINOR_RN=['i','ii°','III','iv','v','VI','VII'];
+
+const PROGS_MAJOR=[[0,3,4,0],[0,4,5,3],[1,4,0],[0,5,3,4],[5,3,0,4],[0,3,5,4]];
+const PROGS_MINOR=[[0,3,4,0],[0,5,2,6],[0,3,6,2],[1,4,0],[0,6,5,4],[0,4,3,0]];
+
+const SCALES=[
+  {name:'Major scale',steps:MAJOR_STEPS},
+  {name:'Natural minor scale',steps:MINOR_STEPS},
+  {name:'Harmonic minor scale',steps:[0,2,3,5,7,8,11]},
+  {name:'Major pentatonic',steps:[0,2,4,7,9]},
+  {name:'Minor pentatonic',steps:[0,3,5,7,10]},
+];
+
+const TUNING_PRESETS={
+  6:[['E,A,D,G,B,E','Standard (E A D G B E)'],['D,A,D,G,B,E','Drop D'],['D#,G#,C#,F#,A#,D#','Half-step down'],
+     ['C,G,C,F,A,D','Drop C'],['D,A,D,G,A,D','DADGAD'],['D,G,D,G,B,D','Open G'],['D,A,D,F#,A,D','Open D'],['custom','Custom&hellip;']],
+  7:[['B,E,A,D,G,B,E','Standard 7-string (B E A D G B E)'],['A,E,A,D,G,B,E','Drop A'],['custom','Custom&hellip;']],
+  8:[['F#,B,E,A,D,G,B,E','Standard 8-string (F# B E A D G B E)'],['E,B,E,A,D,G,B,E','Drop E'],['custom','Custom&hellip;']],
+};
+
+const keySel=document.getElementById('keySel');
+NOTES.forEach(n=>{const o=document.createElement('option');o.value=n;o.textContent=n;keySel.appendChild(o);});
+keySel.value='C';
+
+const tuningSel=document.getElementById('tuningSel');
+const tuningRow=document.getElementById('tuningRow');
+const stringCountSel=document.getElementById('stringCountSel');
+
+function buildTuningInputs(notes){
+  tuningRow.innerHTML='';
+  notes.forEach((n)=>{
+    const inp=document.createElement('input');
+    inp.type='text';inp.maxLength=2;inp.value=n;
+    inp.addEventListener('change',()=>{tuningSel.value='custom';render();});
+    tuningRow.appendChild(inp);
+  });
+}
+function populateTuningPresets(count){
+  tuningSel.innerHTML='';
+  TUNING_PRESETS[count].forEach(([val,label])=>{
+    const o=document.createElement('option');o.value=val;o.innerHTML=label;tuningSel.appendChild(o);
+  });
+}
+function initForStringCount(count){
+  populateTuningPresets(count);
+  buildTuningInputs(TUNING_PRESETS[count][0][0].split(','));
+  render();
+}
+stringCountSel.addEventListener('change',()=>initForStringCount(stringCountSel.value));
+tuningSel.addEventListener('change',()=>{
+  if(tuningSel.value!=='custom') buildTuningInputs(tuningSel.value.split(','));
+  render();
+});
+keySel.addEventListener('change',render);
+document.getElementById('modeSel').addEventListener('change',render);
+
+function currentTuningPCs(){
+  return [...tuningRow.querySelectorAll('input')].map(i=>{
+    const v=i.value.trim();
+    const j=idx(v.charAt(0).toUpperCase()+v.slice(1).replace('b','#'));
+    return j<0?0:j;
+  });
+}
+
+function chordTones(rootIdx,quality){return QUALITY_TONES[quality].map(i=>(rootIdx+i+12)%12);}
+function windowFrets(start){return start===0?[1,2,3,4]:[start,start+1,start+2,start+3];}
+
+function findVoicing(tuningPCs,tones){
+  for(let start=0; start<=9; start++){
+    const wf=windowFrets(start);
+    let frets=[],muted=0;
+    for(const pc of tuningPCs){
+      let chosen=null;
+      if(tones.includes(pc)) chosen=0;
+      else{ for(const f of wf){ if(tones.includes((pc+f)%12)){chosen=f;break;} } }
+      if(chosen===null){muted++;frets.push(null);} else frets.push(chosen);
+    }
+    if(muted<=1) return {frets,start};
+  }
+  for(let start=0; start<=9; start++){
+    const wf=windowFrets(start);
+    let frets=[],muted=0;
+    for(const pc of tuningPCs){
+      let chosen=null;
+      if(tones.includes(pc)) chosen=0;
+      else{ for(const f of wf){ if(tones.includes((pc+f)%12)){chosen=f;break;} } }
+      if(chosen===null){muted++;frets.push(null);} else frets.push(chosen);
+    }
+    if(muted<=2) return {frets,start};
+  }
+  return {frets:tuningPCs.map(()=>null),start:0};
+}
+
+function chordDiagram(name,frets,start,tuningPCs,rootIdx,quality){
+  const n=frets.length, w=155, h=182, top=36, left=20, right=20;
+  const fw=(w-left-right)/(n-1), fh=(h-top-14)/4;
+  const wf=windowFrets(start);
+  const tones=QUALITY_TONES[quality], labels=QUALITY_LABELS[quality];
+  let s=`<svg viewBox="0 0 ${w} ${h+30}" width="${w}">`;
+  s+=`<text class="lbl" x="${w/2}" y="16" text-anchor="middle" font-weight="600" font-size="14">${name}</text>`;
+  frets.forEach((f,i)=>{
+    const x=left+i*fw;
+    if(f===0){
+      const pc=tuningPCs[i], offset=(pc-rootIdx+12)%12, ti=tones.indexOf(offset);
+      const isRoot=offset===0, lbl=ti>=0?labels[ti]:'';
+      s+=`<circle cx="${x}" cy="${top-14}" r="8.5" fill="${isRoot?'var(--amber)':'var(--dot)'}" stroke="var(--cream)" stroke-width="1.2"/>`;
+      s+=`<text x="${x}" y="${top-10.5}" text-anchor="middle" font-size="9" font-weight="700" fill="var(--dottext)">${lbl}</text>`;
+    }
+    else if(f===null) s+=`<text class="lbl" x="${x}" y="${top-8}" text-anchor="middle" font-size="14">&times;</text>`;
+  });
+  if(start>0) s+=`<text class="lbl" x="${left-12}" y="${top+fh*0.6}" font-size="12" text-anchor="end">${start}fr</text>`;
+  s+=`<line x1="${left}" y1="${top}" x2="${left+(n-1)*fw}" y2="${top}" stroke="var(--fret)" stroke-width="${start===0?4:1.3}"/>`;
+  for(let r=1;r<=4;r++){ const y=top+r*fh; s+=`<line x1="${left}" y1="${y}" x2="${left+(n-1)*fw}" y2="${y}" stroke="var(--line)" stroke-width="1.3"/>`; }
+  for(let i=0;i<n;i++){ const x=left+i*fw; s+=`<line x1="${x}" y1="${top}" x2="${x}" y2="${top+4*fh}" stroke="var(--fret)" stroke-width="1.3"/>`; }
+  frets.forEach((f,i)=>{
+    if(f===null||f===0) return;
+    const x=left+i*fw, wi=wf.indexOf(f), y=top+(wi+0.5)*fh;
+    const pc=(tuningPCs[i]+f)%12, offset=(pc-rootIdx+12)%12, ti=tones.indexOf(offset);
+    const isRoot=offset===0, lbl=ti>=0?labels[ti]:'';
+    s+=`<circle cx="${x}" cy="${y}" r="10.5" fill="${isRoot?'var(--amber)':'var(--dot)'}"/>`;
+    s+=`<text x="${x}" y="${y+3.5}" text-anchor="middle" font-size="9.5" font-weight="700" fill="var(--dottext)">${lbl}</text>`;
+  });
+  s+='</svg>';
+  return s;
+}
+
+function romanChord(rootIdx,steps,quals,rn,i){
+  const cRoot=(rootIdx+steps[i])%12;
+  return {name:NOTES[cRoot]+QUALITY_SUFFIX[quals[i]], root:cRoot, quality:quals[i], rn:rn[i]};
+}
+
+function scaleDiagram(title,steps,rootIdx,tuningPCs){
+  const n=tuningPCs.length, frets=12;
+  const top=24, w=780, h=top+n*30+18, left=34;
+  const fw=(w-left-20)/frets;
+  const tones=steps.map(st=>(rootIdx+st)%12);
+  const noteNames=steps.map(st=>NOTES[(rootIdx+st)%12]);
+  let s=`<svg viewBox="0 0 ${w} ${h}" width="100%">`;
+  for(let f=0;f<=frets;f++){
+    const x=left+f*fw;
+    s+=`<line x1="${x}" y1="${top}" x2="${x}" y2="${top+(n-1)*30}" stroke="${f===0?'var(--fret)':'var(--line)'}" stroke-width="${f===0?3:1}"/>`;
+    if(f>0) s+=`<text class="lbl" x="${x}" y="${top+(n-1)*30+16}" font-size="9" text-anchor="middle">${f}</text>`;
+  }
+  for(let i=0;i<n;i++){ const y=top+i*30; s+=`<line x1="${left}" y1="${y}" x2="${left+frets*fw}" y2="${y}" stroke="var(--fret)" stroke-width="1"/>`; }
+  for(let i=0;i<n;i++){
+    const y=top+i*30, pc0=tuningPCs[i];
+    for(let f=0;f<=frets;f++){
+      const pc=(pc0+f)%12;
+      if(tones.includes(pc)){
+        const isRoot=pc===rootIdx, x=left+f*fw, nm=NOTES[pc];
+        if(isRoot) s+=`<circle cx="${x}" cy="${y}" r="12.5" fill="var(--amber)" opacity="0.22"/>`;
+        s+=`<circle cx="${x}" cy="${y}" r="9.5" fill="${isRoot?'var(--amber)':'var(--dot)'}" stroke="${isRoot?'#fff6e6':'none'}" stroke-width="1.3"/>`;
+        s+=`<text x="${x}" y="${y+3}" text-anchor="middle" font-size="${nm.length>1?'8':'9.5'}" font-weight="700" fill="var(--dottext)">${nm}</text>`;
+      }
+    }
+  }
+  s+='</svg>';
+  return `<details class="card"><summary><span class="ttl">${title}</span><span class="notes">${noteNames.join(', ')}</span><span class="arrow">&#9656;</span></summary><div class="body">${s}</div></details>`;
+}
+
+let PROG_ORDER=[0,1,2,3,4,5];
+let SCALE_ORDER=[0,1,2,3,4];
+function swapToTop(orderArr,val){
+  const pos=orderArr.indexOf(val);
+  if(pos<=0) return false;
+  [orderArr[0],orderArr[pos]]=[orderArr[pos],orderArr[0]];
+  return true;
+}
+function swapToBottom(orderArr,val){
+  const pos=orderArr.indexOf(val), last=orderArr.length-1;
+  if(pos===last) return false;
+  [orderArr[last],orderArr[pos]]=[orderArr[pos],orderArr[last]];
+  return true;
+}
+
+let lastRootIdx,lastMode,lastTuningPCs;
+
+function renderProgsOnly(){
+  const steps=lastMode==='major'?MAJOR_STEPS:MINOR_STEPS;
+  const quals=lastMode==='major'?MAJOR_QUAL:MINOR_QUAL;
+  const rn=lastMode==='major'?MAJOR_RN:MINOR_RN;
+  const progsData=lastMode==='major'?PROGS_MAJOR:PROGS_MINOR;
+  const box=document.getElementById('progs'); box.innerHTML='';
+  PROG_ORDER.forEach((origIdx,pos)=>{
+    const chords=progsData[origIdx].map(i=>romanChord(lastRootIdx,steps,quals,rn,i));
+    const det=document.createElement('details'); det.className='card';
+    if(pos===PROG_ORDER.length-1) det.open=true;
+    det.innerHTML=`<summary><span class="ttl">${chords.map(c=>c.rn).join(' &ndash; ')} &nbsp;&mdash;&nbsp; ${chords.map(c=>c.name).join(' &ndash; ')}</span><span class="arrow">&#9656;</span></summary>
+      <div class="body"><div class="chord-row">${chords.map(c=>{
+        const v=findVoicing(lastTuningPCs,chordTones(c.root,c.quality));
+        return chordDiagram(c.name,v.frets,v.start,lastTuningPCs,c.root,c.quality);
+      }).join('')}</div></div>`;
+    det.addEventListener('toggle',()=>{ if(det.open && swapToBottom(PROG_ORDER,origIdx)) renderProgsOnly(); });
+    box.appendChild(det);
+  });
+}
+
+function renderScalesOnly(){
+  const box=document.getElementById('scales'); box.innerHTML='';
+  SCALE_ORDER.forEach((origIdx,pos)=>{
+    const sc=SCALES[origIdx];
+    const tmp=document.createElement('div');
+    tmp.innerHTML=scaleDiagram(sc.name,sc.steps,lastRootIdx,lastTuningPCs);
+    const det=tmp.firstElementChild;
+    if(pos===0) det.open=true;
+    det.addEventListener('toggle',()=>{ if(det.open && swapToTop(SCALE_ORDER,origIdx)) renderScalesOnly(); });
+    box.appendChild(det);
+  });
+}
+
+function render(){
+  lastRootIdx=idx(keySel.value);
+  lastMode=document.getElementById('modeSel').value;
+  lastTuningPCs=currentTuningPCs();
+  PROG_ORDER=[0,1,2,3,4,5];
+  SCALE_ORDER=[0,1,2,3,4];
+  renderProgsOnly();
+  renderScalesOnly();
+}
+initForStringCount('6');
+</script>
+</body>
+</html>
